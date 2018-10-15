@@ -1,0 +1,9 @@
+[package]
+name = "ammaccare"
+version = "0.1.0"
+authors = ["Sam Scott <sam.scott89@gmail.com>"]
+
+[dependencies]
+sodiumoxide = "0.1.0"
+failure = "0.1.2"
+url = "1.7.1"
