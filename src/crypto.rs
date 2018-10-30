@@ -7,7 +7,8 @@ use std::borrow::Cow;
 use std::mem;
 
 // Local imports
-use super::AsBytes;
+// ...
+
 
 pub fn mac<'a, K: Into<&'a hmac::Key>>(key: K, x: &[u8]) -> Signature {
     hmac::authenticate(x, key.into()).into()
@@ -41,8 +42,14 @@ pub fn macaroon_key(key: &[u8]) -> Signature {
     hmac::authenticate(&key, &hmac::Key(*KEY_GENERATOR)).into()
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Signature([u8; hmac::TAGBYTES]);
+
+impl Signature {
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
 
 impl<'a> Into<&'a secretbox::Key> for &'a Signature {
     fn into(self) -> &'a secretbox::Key {
@@ -71,11 +78,5 @@ impl<'a> Into<&'a hmac::Key> for &'a mut Signature {
 impl From<hmac::Tag> for Signature {
     fn from(other: hmac::Tag) -> Self {
         Signature(other.0)
-    }
-}
-
-impl AsBytes for Signature {
-    fn as_bytes<'a>(&'a self) -> Cow<'a, [u8]> {
-        Cow::from(&self.0[..])
     }
 }

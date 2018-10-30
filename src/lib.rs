@@ -1,4 +1,7 @@
 extern crate failure;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate sodiumoxide;
 extern crate url;
 
@@ -6,13 +9,12 @@ pub mod caveat;
 pub mod crypto;
 pub mod macaroon;
 
-use std::borrow::Cow;
+pub use caveat::Caveat;
+pub use macaroon::Macaroon;
 
-pub trait AsBytes {
-    fn as_bytes<'a>(&'a self) -> Cow<'a, [u8]>;
+pub fn macaroon_key() -> Vec<u8> {
+    sodiumoxide::randombytes::randombytes(32)
 }
-
-
 
 // pub fn get_secret_token(key: Key, app_id: String, secret_name: String) -> Macaroon {
 //     let identifier = format!("{} || {}", app_id, secret_name);

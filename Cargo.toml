@@ -7,3 +7,5 @@ authors = ["Sam Scott <sam.scott89@gmail.com>"]
 sodiumoxide = "0.1.0"
 failure = "0.1.2"
 url = "1.7.1"
+serde = "1.0.80"
+serde_derive = "1.0.80"
