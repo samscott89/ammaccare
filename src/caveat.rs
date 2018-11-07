@@ -102,7 +102,7 @@ fn opt_to_string<'a>(opt: Option<&'a [u8]>) -> Option<String> {
 pub trait ThirdParty {
     fn get_cid(&self, key: Vec<u8>, identifier: Vec<u8>) -> Vec<u8>;
 
-    fn from_cid(&self, cid: Vec<u8>) -> Option<(Vec<u8>, Vec<u8>)>;
+    fn from_cid(&self, cid: &[u8]) -> Option<(Vec<u8>, Vec<u8>)>;
 }
 
 pub struct LookupCid {
@@ -124,8 +124,8 @@ impl ThirdParty for LookupCid {
         cid
     }
 
-    fn from_cid(&self, cid: Vec<u8>) -> Option<(Vec<u8>, Vec<u8>)> {
-        self.table.borrow().get(&cid).map(|c| c.clone())
+    fn from_cid(&self, cid: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
+        self.table.borrow().get(cid).map(|c| c.clone())
     }
 
 }
@@ -157,8 +157,8 @@ impl ThirdParty for EncryptedChallenge {
         crypto::senc(&self.shared_key, &pt[..])
     }
 
-    fn from_cid(&self, cid: Vec<u8>) -> Option<(Vec<u8>, Vec<u8>)> {
-        let pt = crypto::sdec(&self.shared_key, &cid[..]);
+    fn from_cid(&self, cid: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
+        let pt = crypto::sdec(&self.shared_key, cid);
         if let Ok(mut pt) = pt {
             // TODO: remove hardcoded length
             let identifier = pt.split_off(32);

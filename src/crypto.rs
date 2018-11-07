@@ -30,7 +30,10 @@ pub fn senc<'a, K: Into<&'a secretbox::Key>>(key: K, m: &[u8]) -> Vec<u8> {
 }
 
 pub fn sdec<'a, K: Into<&'a secretbox::Key>>(key: K, ct: &[u8]) -> Result<Vec<u8>, ()> {
-    let nonce = secretbox::Nonce::from_slice(&ct[..secretbox::NONCEBYTES]).unwrap();
+    if ct.len() < secretbox::NONCEBYTES {
+        return Err(());
+    }
+    let nonce = secretbox::Nonce::from_slice(&ct[..secretbox::NONCEBYTES]).ok_or(())?;
     secretbox::open(&ct[secretbox::NONCEBYTES..], &nonce, key.into())
 }
 
