@@ -3,8 +3,7 @@ use sodiumoxide::crypto::auth::hmacsha256 as hmac;
 use sodiumoxide::crypto::secretbox;
 
 // Std imports
-use std::borrow::Cow;
-use std::mem;
+// ...
 
 // Local imports
 // ...
@@ -39,7 +38,7 @@ pub fn sdec<'a, K: Into<&'a secretbox::Key>>(key: K, ct: &[u8]) -> Result<Vec<u8
 
 // Macaroons personalize the HMAC key using the string
 // "macaroons-key-generator" padded to 32-bytes with zeroes
-pub const KEY_GENERATOR: &'static [u8; 32] = b"macaroons-key-generator\0\0\0\0\0\0\0\0\0";
+pub const KEY_GENERATOR: &[u8; 32] = b"macaroons-key-generator\0\0\0\0\0\0\0\0\0";
 
 pub fn macaroon_key(key: &[u8]) -> Signature {
     hmac::authenticate(&key, &hmac::Key(*KEY_GENERATOR)).into()
@@ -57,7 +56,7 @@ impl Signature {
 impl<'a> Into<&'a secretbox::Key> for &'a Signature {
     fn into(self) -> &'a secretbox::Key {
         unsafe {
-            mem::transmute(self)
+            &*(self as *const Signature as *const secretbox::Key)
         }
     } 
 }
@@ -65,7 +64,7 @@ impl<'a> Into<&'a secretbox::Key> for &'a Signature {
 impl<'a> Into<&'a hmac::Key> for &'a Signature {
     fn into(self) -> &'a hmac::Key {
         unsafe {
-            mem::transmute(self)
+            &*(self as *const Signature as *const hmac::Key)
         }
     } 
 }
@@ -73,7 +72,7 @@ impl<'a> Into<&'a hmac::Key> for &'a Signature {
 impl<'a> Into<&'a hmac::Key> for &'a mut Signature {
     fn into(self) -> &'a hmac::Key {
         unsafe {
-            mem::transmute(self)
+            &*(self as *const Signature as *const hmac::Key)
         }
     } 
 }

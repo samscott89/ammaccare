@@ -180,7 +180,7 @@ mod test {
 
 
         // "send" the cid to the other party
-        let (ck, preds) = third_party.from_cid(&cid).unwrap();
+        let (ck, _preds) = third_party.from_cid(&cid).unwrap();
         // receive discharge
         let discharge = Macaroon::new(&ck, cid);
 

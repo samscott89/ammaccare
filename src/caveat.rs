@@ -1,19 +1,14 @@
 // External imports
-use failure::Error;
 use sodiumoxide::{crypto::auth::hmacsha256 as hmac, randombytes};
 
 // Std imports
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fmt::Debug;
-use std::marker::Sized;
 use std::str;
 
 // Project imports
 use super::crypto;
-use super::macaroon::Macaroon;
-
 
 /// A simple container for the caveat values.
 /// By itself just holds bytes, but can be used with a `Validator`
@@ -35,7 +30,7 @@ impl Caveat {
     }
 
     pub fn is_third_party(&self) -> bool {
-        !self.vid.is_none()
+        self.vid.is_some()
     }
 
     pub fn validate(&self) -> bool {
@@ -57,26 +52,17 @@ impl Caveat {
 
 
 
-    pub fn cid<'a>(&'a self) -> Cow<'a, [u8]> {
+    pub fn cid(&self) -> Cow<[u8]> {
         Cow::from(&self.cid)
     }
-    pub fn vid<'a>(&'a self) -> Cow<'a, [u8]> {
-        self.vid.as_ref().map(|vid| Cow::from(vid)).unwrap_or(Cow::from(vec![]))
-    }
-    // pub fn loc<'a>(&'a self) -> Cow<'a, [u8]> {
-    //     Cow::from(&self.cl)
-    // }
-    // pub fn key<'a>(&'a self) -> Cow<'a, [u8]> {
-    //     self.key.as_ref().map(|key| Cow::from(key)).unwrap_or(Cow::from(vec![]))
-    // }
 
+    pub fn vid(&self) -> Cow<[u8]> {
+        self.vid.as_ref().map(Cow::from).unwrap_or_else(|| Cow::from(vec![]))
+    }
 
     pub fn set_vid(&mut self, vid: Vec<u8>) {
         self.vid = Some(vid)
     }
-    // pub fn set_key(&mut self, key: Vec<u8>) {
-    //     self.key = Some(key)
-    // }
 }
 
 pub trait Validator {
@@ -94,19 +80,17 @@ impl Validator for TestValidator {
     }
 }
 
-#[inline]
-fn opt_to_string<'a>(opt: Option<&'a [u8]>) -> Option<String> {
-    opt.and_then(|vid: &[u8]| String::from_utf8(vid.to_vec()).ok())
-}
-
 pub trait ThirdParty {
     fn get_cid(&self, key: Vec<u8>, identifier: Vec<u8>) -> Vec<u8>;
 
     fn from_cid(&self, cid: &[u8]) -> Option<(Vec<u8>, Vec<u8>)>;
 }
 
+type CidToKeyId = HashMap<Vec<u8>, (Vec<u8>, Vec<u8>)>;
+
+#[derive(Default)]
 pub struct LookupCid {
-    table: RefCell<HashMap<Vec<u8>, (Vec<u8>, Vec<u8>)>>,
+    table: RefCell<CidToKeyId>,
 }
 
 impl LookupCid {
@@ -125,9 +109,8 @@ impl ThirdParty for LookupCid {
     }
 
     fn from_cid(&self, cid: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
-        self.table.borrow().get(cid).map(|c| c.clone())
+        self.table.borrow().get(cid).cloned()
     }
-
 }
 
 pub struct EncryptedChallenge {
