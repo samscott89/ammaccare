@@ -1,38 +1,34 @@
 // External imports
-use url::Url;
 
 // Std imports
-use std::borrow::Cow;
-use std::fmt::Debug;
 
 // Local imports
-use super::{crypto, caveat};
+use super::crypto;
 use crypto::Signature;
 use super::caveat::Caveat;
-
-#[derive(Clone, Debug)]
-enum Version {
-    V1,
-    V2,
-}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Macaroon {
     // location: Vec<u8>,
     identifier: Vec<u8>,
     signature: crypto::Signature,
-    caveats: Vec<Caveat>
+    caveats: Vec<Caveat>,
+    discharges: Vec<Macaroon>,
 }
 
 impl Macaroon {
     pub fn new(key: &[u8], identifier: Vec<u8>) -> Self {
         let key = crypto::macaroon_key(key);
         Self {
-            // location: location,
-            signature: crypto::mac(&key, &identifier).into(),
-            identifier: identifier,
+            signature: crypto::mac(&key, &identifier),
+            identifier,
             caveats: Vec::new(),
+            discharges: Vec::new(),
         }
+    }
+
+    pub fn caveats(&self) -> &[Caveat] {
+        &self.caveats
     }
 
     fn add_caveat(&mut self, caveat: Caveat) {
@@ -41,10 +37,9 @@ impl Macaroon {
         self.signature = sig;
     }
 
-    pub fn add_third_party_caveat(&mut self, mut caveat: Caveat, caveat_key: Vec<u8>) {
+    pub fn add_third_party_caveat(&mut self, mut caveat: Caveat, caveat_key: &[u8]) {
         let vid = crypto::senc(&self.signature, &caveat_key);
         caveat.set_vid(vid);
-        // caveat.set_key(caveat_key);
         self.add_caveat(caveat);
     }
 
@@ -56,11 +51,12 @@ impl Macaroon {
         crypto::mac(signature, &self.signature.as_slice())
     }
 
-    pub fn prepare(&self, discharge: &mut Macaroon) {
+    pub fn prepare(&mut self, mut discharge: Macaroon) {
         discharge.signature = self.bind_for_request(&discharge.signature);
+        self.discharges.push(discharge);
     }
 
-    pub fn verify_caveats(&self, sig: &mut Signature, target: &Macaroon, discharges: &[Macaroon]) -> bool {
+    pub fn verify_caveats(&self, sig: &mut Signature) -> bool {
         for caveat in self.caveats.iter() {
             if caveat.is_third_party() {
                 // println!("Check third party predicate: {:#?}", &caveat);
@@ -69,9 +65,9 @@ impl Macaroon {
                     Err(_) => return false,
                 };
                 let mut checked = false;
-                for discharge in discharges {
-                    if &discharge.identifier == &caveat.cid().as_ref() &&
-                        discharge.verify_inner(&caveat_key, &self, discharges) {
+                for discharge in self.discharges.iter() {
+                    if discharge.identifier == caveat.cid().as_ref() &&
+                        discharge.verify_inner(&caveat_key, &self) {
                         // println!("Verified with {:#?}", discharge);
                         checked = true;
                     }
@@ -80,11 +76,8 @@ impl Macaroon {
                     println!("Failed to check caveat");
                     return false;
                 }
-            } else {
-                if !caveat.validate() {
-                    return false
-                }
-                // println!("Check first party predicate: {:#?}", &caveat);            
+            } else if !caveat.validate() {
+                return false
             }
             // *sig = format!("MAC({}, {} :: {})", sig, &caveat.vid.clone().unwrap_or("".to_string()), &caveat.cid);
             *sig = crypto::mac2(&*sig, &caveat.vid(), &caveat.cid())
@@ -92,17 +85,17 @@ impl Macaroon {
         true
     }
 
-    pub fn verify(&self, key: &[u8], discharges: &[Macaroon]) -> bool {
+    pub fn verify(&self, key: &[u8]) -> bool {
         let key = crypto::macaroon_key(key);
-        let mut sig: Signature = crypto::mac(&key, &self.identifier).into();
-        let checked = self.verify_caveats(&mut sig, &self, discharges);
+        let mut sig: Signature = crypto::mac(&key, &self.identifier);
+        let checked = self.verify_caveats(&mut sig);
         checked && sig == self.signature
     }
 
-    fn verify_inner(&self, key: &[u8], target: &Macaroon, discharges: &[Macaroon]) -> bool {
+    fn verify_inner(&self, key: &[u8], target: &Macaroon) -> bool {
         let key = crypto::macaroon_key(key);
-        let mut sig: Signature = crypto::mac(&key, &self.identifier).into();
-        let checked = self.verify_caveats(&mut sig, target, discharges);
+        let mut sig: Signature = crypto::mac(&key, &self.identifier);
+        let checked = self.verify_caveats(&mut sig);
         sig = target.bind_for_request(&sig);
         checked && sig == self.signature
     }
@@ -119,6 +112,7 @@ pub struct Identifier {
 #[cfg(test)]
 mod test {
     use super::*;
+    use caveat;
     use caveat::ThirdParty;
 
     #[test]
@@ -130,7 +124,7 @@ mod test {
             b"test id".to_vec(),
         );
 
-        assert!(macaroon.verify(key, &[]));
+        assert!(macaroon.verify(key));
     }
 
     #[test]
@@ -145,7 +139,7 @@ mod test {
         let caveat = Caveat::new(b"TEST//this is a test".to_vec());
         macaroon.add_first_party_caveat(caveat);
 
-        assert!(macaroon.verify(key, &[]));
+        assert!(macaroon.verify(key));
     }
 
     #[test]
@@ -160,7 +154,7 @@ mod test {
         let caveat = Caveat::new(b"broken test".to_vec());
         macaroon.add_first_party_caveat(caveat);
 
-        assert!(!macaroon.verify(key, &[]));
+        assert!(!macaroon.verify(key));
     }
 
     #[test]
@@ -179,20 +173,20 @@ mod test {
         let cid = third_party.get_cid(ck.clone(), b"Validation test for the third party".to_vec());
 
         let caveat = Caveat::new(cid.clone());
-        macaroon.add_third_party_caveat(caveat, ck);
+        macaroon.add_third_party_caveat(caveat, &ck);
 
         // will not verify without discharge
-        assert!(!macaroon.verify(key, &[]));
+        assert!(!macaroon.verify(key));
 
 
         // "send" the cid to the other party
-        let (ck, preds) = third_party.from_cid(cid.clone()).unwrap();
+        let (ck, preds) = third_party.from_cid(&cid).unwrap();
         // receive discharge
-        let mut discharge = Macaroon::new(&ck, cid);
+        let discharge = Macaroon::new(&ck, cid);
 
         // bind to macaroon
-        macaroon.prepare(&mut discharge);
+        macaroon.prepare(discharge);
 
-        assert!(macaroon.verify(key, &[discharge]));
+        assert!(macaroon.verify(key));
     }
 }
