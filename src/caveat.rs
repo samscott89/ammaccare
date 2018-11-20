@@ -1,10 +1,12 @@
 // External imports
+use data_encoding::BASE64_NOPAD;
 use sodiumoxide::{crypto::auth::hmacsha256 as hmac, randombytes};
 
 // Std imports
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt;
 use std::str;
 
 // Project imports
@@ -13,12 +15,32 @@ use super::crypto;
 /// A simple container for the caveat values.
 /// By itself just holds bytes, but can be used with a `Validator`
 /// implementation to 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Caveat {
     pub cid: Vec<u8>,
     pub vid: Option<Vec<u8>>,
     pub cl: Option<Vec<u8>>,
 }
+
+impl fmt::Debug for Caveat {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let cl = self.cl.as_ref().map(|cl| {
+            match str::from_utf8(&cl){
+                Ok(ref s) if s.is_ascii() => format!("Decoded: {}", s),
+                _ => format!("Opaque: {}", BASE64_NOPAD.encode(&cl)),
+            }
+        });
+        let cid = BASE64_NOPAD.encode(&self.cid);
+        let vid = self.vid.as_ref().map(|vid| BASE64_NOPAD.encode(&vid));
+
+        f.debug_struct("Caveat")
+         .field("cid", &cid)
+         .field("vid", &vid)
+         .field("cl", &cl)
+         .finish()
+    }
+}
+
 
 impl Caveat {
     pub fn new(predicate: Vec<u8>) -> Self {

@@ -1,19 +1,37 @@
 // External imports
+use data_encoding::BASE64_NOPAD;
 
 // Std imports
+use std::fmt;
+use std::str;
 
 // Local imports
 use super::crypto;
 use crypto::Signature;
 use super::caveat::Caveat;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Macaroon {
     // location: Vec<u8>,
     identifier: Vec<u8>,
     signature: crypto::Signature,
     caveats: Vec<Caveat>,
     discharges: Vec<Macaroon>,
+}
+
+impl fmt::Debug for Macaroon {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
+        let id = str::from_utf8(&self.identifier);
+        let id = match id {
+            Ok(ref s) if s.is_ascii() => format!("Decoded: {}", s),
+            _ => format!("Opaque: {}", BASE64_NOPAD.encode(&self.identifier)),
+        };
+        f.debug_struct("Macaroon")
+         .field("id", &id)
+         .field("caveats", &self.caveats)
+         .field("discharges", &self.discharges)
+         .finish()
+    }
 }
 
 impl Macaroon {
@@ -188,5 +206,6 @@ mod test {
         macaroon.prepare(discharge);
 
         assert!(macaroon.verify(key));
+        println!("{:#?}", macaroon);
     }
 }

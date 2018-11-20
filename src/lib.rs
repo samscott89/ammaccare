@@ -1,3 +1,4 @@
+extern crate data_encoding;
 extern crate failure;
 extern crate serde;
 #[macro_use]
