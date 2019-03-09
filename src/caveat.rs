@@ -146,10 +146,10 @@ impl EncryptedChallenge {
         }
     }
 
-    pub fn fresh(&self) -> (Caveat, Vec<u8>) {
+    pub fn fresh(&self, identifier: &[u8]) -> (Caveat, Vec<u8>) {
         let key = randombytes::randombytes(32); 
-        let id  = randombytes::randombytes(32);
-        let cid = self.get_cid(key.clone(), id);
+        // let id  = randombytes::randombytes(32);
+        let cid = self.get_cid(key.clone(), identifier.to_vec());
         (Caveat::new(cid), key)
     }
 }
